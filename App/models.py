@@ -1,6 +1,7 @@
 from django.db import models
-from django.contrib.auth.models import AbstractUser
-from django.contrib.auth.models import BaseUserManager
+# AbstractUser to only modify User,  base_user.AbstractUser totally new User
+from django.contrib.auth.models import AbstractUser                   
+from django.contrib.auth.base_user import BaseUserManager          # import it from base_user
 
 class UserManager(BaseUserManager):
     # normal user 
@@ -9,7 +10,8 @@ class UserManager(BaseUserManager):
             raise ValueError("Users must have an email address")
 
         user = self.model(
-            email=self.normalize_email(email)
+            email=self.normalize_email(email),
+            **other_fields                    #  normal user don't have permissions
         )
 
         user.set_password(password)
@@ -17,31 +19,29 @@ class UserManager(BaseUserManager):
         return user
     
     # this method change the fuctionality to create super user
-    def create_superuser(self, email, password=None):
+    def create_superuser(self, email, password=None, **other_fields):
         """
-        Creates and saves a superuser with the given email, date of
-        birth and password.
+        Creates and saves a superuser with the given email and password.
         """
-        user = self.create_user(
-            email,
-            password=password,
-        )
-        user.is_admin = True
-        user.save(using=self._db)
-        return user
-    
+        # set the permissions which  are required to be a superuser
+        other_fields.setdefault('is_staff',True)
+        other_fields.setdefault('is_active',True)
+        other_fields.setdefault('is_superuser',True)
 
+        if other_fields.get("is_staff") is not True:
+            raise ValueError(_("Superuser must have is_staff=True."))
+        if other_fields.get("is_superuser") is not True:
+            raise ValueError(_("Superuser must have is_superuser=True."))
+        
+        return self.create_user(email,password=password,**other_fields)
+    
+# user AbstractUser if wants already exists fields Of django default User otherwise use AbstractBaseUser
 # Create your models here.
 class User(AbstractUser):
-    username = models.CharField(default=None, null= True , max_length=10) 
+    username = None
     email = models.EmailField(unique=True)
-    password = models.CharField(max_length=10)
-    name = models.CharField(max_length=15, null=True, blank=True)
     address = models.CharField(max_length=20, null=True, blank=True)
     mobile = models.CharField(max_length=10, null=True, blank=True)
-    is_active = models.BooleanField(default=True)
-    is_admin = models.BooleanField(default=False)
-    # don't write is_staff it will added automatically
 
     objects = UserManager()
 
@@ -51,19 +51,3 @@ class User(AbstractUser):
      
     def __str__(self):
         return self.email
-
-    def has_perm(self, perm, obj=None):
-        "Does the user have a specific permission?"
-        # Simplest possible answer: Yes, always
-        return True
-
-    def has_module_perms(self, app_label):
-        "Does the user have permissions to view the app `app_label`?"
-        # Simplest possible answer: Yes, always
-        return True
-    
-    @property
-    def is_staff(self):
-        "Is the user a member of staff?"
-        # Simplest possible answer: All admins are staff
-        return self.is_admin
